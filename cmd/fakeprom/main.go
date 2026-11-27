@@ -3,7 +3,7 @@
 // value from $STATE_DIR/probe (default 1). Queries that mention "serial" return one
 // unix-time serial per server, $STATE_DIR/serial_lag seconds old (default 60).
 // Every other query returns a single sample with the value from $STATE_DIR/value
-// (default 1). Change the files to simulate an outage.
+// (default 1). Change the files to simulate an outage. Listens on $LISTEN (default :9090).
 package main
 
 import (
@@ -62,7 +62,10 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"status": "success", "data": map[string]any{"resultType": "vector", "result": res}})
 	})
-	addr := ":9090"
+	addr := os.Getenv("LISTEN")
+	if addr == "" {
+		addr = ":9090"
+	}
 	fmt.Println("fakeprom listening on", addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
 }

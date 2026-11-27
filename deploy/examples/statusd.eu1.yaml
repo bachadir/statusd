@@ -29,6 +29,7 @@ evaluation:
   leadership_transfer: true           # hand leadership to the peer that can see more sources
 catalog_dir: /etc/statusd/catalog
 public:
+  url: "https://status.example.com"   # linked from webhook messages
   cors_origins: ["https://status.example.com"]
   cache_max_age: 30
   stale_after: 5m
@@ -53,6 +54,16 @@ admin:
     viewer_groups: [status-viewer]
     editor_groups: [status-editor]
     admin_groups: [status-admin]
+
+# Optional: notify endpoints of published status changes (README, "Webhooks"). Same block on us1.
+webhooks:
+  - name: chat
+    format: slack
+    url_file: /etc/statusd/secrets/slack-webhook-url
+    min_status: partial_outage
+  - name: ops
+    url: "https://hooks.example.net/statusd"
+    secret_file: /etc/statusd/secrets/webhook-ops-secret
 
 # Optional: mirror published statuses to a Status.io page (README, "Feeding Status.io").
 statusio:

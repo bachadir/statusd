@@ -113,6 +113,16 @@ CREATE TABLE IF NOT EXISTS announcements (
   author  TEXT    NOT NULL DEFAULT ''
 );
 
+-- Last status each webhook was told about, per component (written by the leader
+-- after a successful delivery, so a new leader continues where the old one stopped).
+CREATE TABLE IF NOT EXISTS webhook_state (
+  webhook   TEXT    NOT NULL,
+  component TEXT    NOT NULL,
+  status    TEXT    NOT NULL,
+  ts        INTEGER NOT NULL,
+  PRIMARY KEY (webhook, component)
+) WITHOUT ROWID;
+
 CREATE TABLE IF NOT EXISTS audit (
   id     INTEGER PRIMARY KEY,
   ts     INTEGER NOT NULL,

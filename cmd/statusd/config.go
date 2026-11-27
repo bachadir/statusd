@@ -12,6 +12,7 @@ import (
 	"statusd/internal/collector"
 	"statusd/internal/statusio"
 	"statusd/internal/store"
+	"statusd/internal/webhook"
 )
 
 type Config struct {
@@ -53,6 +54,7 @@ type Config struct {
 		CacheMaxAge int           `yaml:"cache_max_age"`
 		StaleAfter  time.Duration `yaml:"stale_after"`
 		StaticDir   string        `yaml:"static_dir"`
+		URL         string        `yaml:"url"` // public page URL, linked from webhook messages (optional)
 	} `yaml:"public"`
 
 	Sources map[string]collector.SourceConfig `yaml:"sources"`
@@ -61,6 +63,9 @@ type Config struct {
 
 	// StatusIO: optional, push published statuses to a Status.io page (off by default).
 	StatusIO statusio.Config `yaml:"statusio"`
+
+	// Webhooks: notify HTTP endpoints of published status changes (full nodes).
+	Webhooks []webhook.Config `yaml:"webhooks"`
 }
 
 func loadConfig(path string) (*Config, error) {

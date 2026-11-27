@@ -48,6 +48,26 @@
   </table>
   {{end}}
   {{end}}
+  {{with .Data.Webhooks}}
+  <h3>Webhooks</h3>
+  <p class="muted">{{if .Active}}delivering from this node{{else}}not leader: the leader delivers{{end}}</p>
+  <table class="compact">
+    <tr><th>Webhook</th><th>Format</th><th>Components</th><th>Pending</th><th>Last success</th><th>Last error</th></tr>
+    {{range .Hooks}}
+    <tr><td>{{.Name}}</td><td>{{.Format}}{{if .Signed}} (signed){{end}}</td><td>{{with .Components}}<code>{{.}}</code>{{else}}all{{end}}</td>
+      <td>{{.Pending}}</td><td>{{ts .LastSuccess}}</td><td class="err">{{.LastError}}{{if not .BackoffUntil.IsZero}} · retry {{ts .BackoffUntil}}{{end}}</td></tr>
+    {{end}}
+  </table>
+  {{if .Recent}}
+  <table class="compact">
+    <tr><th>When</th><th>Webhook</th><th>Changes</th><th>Event id</th><th>Result</th></tr>
+    {{range .Recent}}
+    <tr><td>{{ts .At}}</td><td>{{.Webhook}}</td><td>{{.Changes}}</td><td><code>{{.ID}}</code></td>
+      <td>{{if .Error}}<span class="bad">{{.Error}}</span>{{else}}<span class="ok">HTTP {{.Code}}</span>{{end}}</td></tr>
+    {{end}}
+  </table>
+  {{end}}
+  {{end}}
 </section>
 
 {{range .Data.Groups}}

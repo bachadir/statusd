@@ -158,6 +158,21 @@ func apply(tx *sql.Tx, c *Command) error {
 			return err
 		}
 		return audit(tx, c, d.Component, "")
+	case CmdWebhookDelivered:
+		var d WebhookDelivered
+		if err := json.Unmarshal(c.Data, &d); err != nil {
+			return err
+		}
+		if err := d.Validate(); err != nil {
+			return err
+		}
+		for comp, st := range d.Statuses {
+			if _, err := tx.Exec(`INSERT OR REPLACE INTO webhook_state(webhook,component,status,ts) VALUES(?,?,?,?)`,
+				d.Webhook, comp, string(st), c.TS); err != nil {
+				return err
+			}
+		}
+		return nil // system bookkeeping: not audited
 	case CmdSetSetting:
 		var d SetSetting
 		if err := json.Unmarshal(c.Data, &d); err != nil {

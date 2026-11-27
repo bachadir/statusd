@@ -416,3 +416,24 @@ func (s *Store) StatusChanges(component string, since int64, limit int) ([]Statu
 	})
 	return out, err
 }
+
+// WebhookState returns the last status the named webhook was told about, per component.
+func (s *Store) WebhookState(webhook string) (map[string]model.Status, error) {
+	out := map[string]model.Status{}
+	err := s.fsm.withDB(func(db *sql.DB) error {
+		rows, err := db.Query(`SELECT component, status FROM webhook_state WHERE webhook=?`, webhook)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c, st string
+			if err := rows.Scan(&c, &st); err != nil {
+				return err
+			}
+			out[c] = model.Status(st)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

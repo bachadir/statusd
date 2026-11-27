@@ -31,6 +31,7 @@ witness form a Raft cluster, and the public page is a static site behind a CDN.
   CDN only proxies and caches it, with `stale-if-error` as a last resort.
 - **Replay.** Run a catalogue change against past Prometheus data and see what the page would have published
   before you ship it.
+- **Webhooks.** Notify chat (Slack, Mattermost, Discord) or any HTTP endpoint when a component's status changes.
 - **Optional Status.io feed.** Mirror the published statuses to an existing Status.io page.
 
 You don't need the full cluster to start: a single node (`raft.bootstrap: true`, no peers) works fine.
@@ -77,6 +78,7 @@ make ha-down
 | `internal/view` | public documents (summary, history, uptime) |
 | `internal/api` | public read-only JSON API + `/healthz` |
 | `internal/admin` | control panel (OIDC, roles, CSRF, audit log) |
+| `internal/webhook` | webhooks on published status changes |
 | `internal/statusio` | optional: push published statuses to a Status.io page |
 | `catalog/*.yml` | example catalogue: groups, components and their signals |
 | `web/public` | public status page |
@@ -275,6 +277,75 @@ Group names are configurable (`admin.oidc.*_groups`).
 | `GET /api/v1/maintenances.json?month=YYYY-MM` | 60 s | maintenance history |
 | `GET /api/v1/uptime.json?days=90` | 300 s | daily uptime per component (major outage counts 100 %, partial 30 %, maintenance excluded) |
 | `GET /healthz` | none | 200 only with a raft leader and fresh data (use it as the load balancer health check) |
+
+## Webhooks
+
+statusd can call HTTP endpoints when a component's **published** status changes: the same status `status.json`
+shows, so automatic changes (after hysteresis), staff overrides and maintenance windows all count. Configure them
+on both full nodes (the witness ignores them):
+
+```yaml
+public:
+  url: https://status.example.com          # optional: linked from chat messages
+webhooks:
+  - name: ops                               # unique; keys the delivery state (don't rename casually)
+    url: https://hooks.example.com/statusd
+    secret_file: /etc/statusd/secrets/webhook-ops   # optional HMAC signing secret (json format)
+    headers: {Authorization: "Bearer …"}            # optional extra headers
+  - name: chat
+    format: slack                           # Slack incoming webhook; also Mattermost, Rocket.Chat, Discord (…/slack)
+    url_file: /etc/statusd/secrets/slack-url  # the URL is the secret here: url_file or url_env keep it out of the config
+    components: 'api/.*|website/.*'         # optional regex on component IDs ("group/slug"); default all
+    min_status: partial_outage              # optional: skip changes that stay below this (e.g. operational ↔ degraded)
+    # timeout: 10s
+```
+
+**How delivery works:**
+- **Only the raft leader delivers.** After each successful delivery it records, in raft, the status each webhook now
+  knows about. A new leader continues from there, so nothing is missed and nothing is resent.
+- **At least once.** If the leader dies between a delivery and recording it, the next leader sends the same event
+  again with the **same `id`**. Use it to de-duplicate.
+- **Changes coalesce.** Each check (every 10 s) sends one request per webhook with every component that changed. If
+  an endpoint is down, statusd retries with backoff (15 s, doubling to 5 min). When the endpoint is back it gets one
+  `from → to` per component, not every flap in between.
+- **Silent baseline.** A new webhook, or a component new to a webhook, starts from its current status without a
+  notification, so turning a webhook on doesn't send one message per component.
+- Hidden components are never sent. Any non-2xx answer counts as a failure, and redirects are not followed. Webhook
+  URLs never appear in logs or the control panel.
+
+**JSON format** (`format: json`, the default): `POST` with
+
+```json
+{
+  "id": "9ece645437cee1d328c0c37944e19f22",
+  "type": "component.status_changed",
+  "sent_at": "2026-11-27T12:43:03Z",
+  "page": {"name": "Example Status", "url": "https://status.example.com"},
+  "overall": {"status": "major_outage"},
+  "changes": [
+    {"component": {"id": "api/public", "name": "Public API", "group": "API"},
+     "from": "operational", "to": "major_outage", "source": "auto", "since": "2026-11-27T12:43:00Z"}
+  ]
+}
+```
+
+Statuses are `operational`, `under_maintenance`, `degraded_performance`, `partial_outage` and `major_outage`;
+`source` is `auto`, `manual` (a staff override) or `maintenance`. Headers: `X-Statusd-Event`, `X-Statusd-Delivery`
+(the id), `X-Statusd-Timestamp` (unix seconds) and, with a secret, `X-Statusd-Signature: sha256=<hex>`. The
+signature is HMAC-SHA256 over `<timestamp>.<body>`. Verify it, and reject old timestamps to stop replays:
+
+```python
+expected = "sha256=" + hmac.new(secret, f"{ts}.".encode() + body, hashlib.sha256).hexdigest()
+ok = hmac.compare_digest(expected, request.headers["X-Statusd-Signature"]) and abs(time.time() - int(ts)) < 300
+```
+
+**Operating it:** the control panel overview lists each webhook with pending changes, last success, last error and
+the latest deliveries. Metrics: `statusd_webhook_deliveries_total{webhook,result}`,
+`statusd_webhook_pending{webhook}` and `statusd_webhook_last_success_timestamp_seconds{webhook}`. A useful alert:
+
+```promql
+max by (webhook) (statusd_webhook_pending) > 0   # for: 15m: an endpoint has been failing
+```
 
 ## Feeding Status.io (optional)
 

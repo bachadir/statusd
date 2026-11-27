@@ -24,6 +24,7 @@ import (
 	"statusd/internal/statusio"
 	"statusd/internal/store"
 	"statusd/internal/view"
+	"statusd/internal/webhook"
 )
 
 //go:embed templates/*.html static/*
@@ -38,6 +39,8 @@ type Deps struct {
 	Version string
 	// StatusIO is the Status.io publisher; nil when statusio.enabled is false.
 	StatusIO interface{ Status() statusio.State }
+	// Webhooks is the webhook dispatcher; nil when no webhooks are configured.
+	Webhooks interface{ Status() webhook.State }
 }
 
 type Admin struct {
@@ -414,10 +417,18 @@ func (a *Admin) dashboard(w http.ResponseWriter, r *http.Request, s *Session) {
 		}
 		sio = &st
 	}
+	var wh *webhook.State
+	if a.Webhooks != nil {
+		st := a.Webhooks.Status()
+		if len(st.Recent) > 10 {
+			st.Recent = st.Recent[:10]
+		}
+		wh = &st
+	}
 	a.render(w, r, s, http.StatusOK, "dashboard", map[string]any{
 		"Title": "Overview", "Groups": groups, "Open": open, "Maint": maint, "Now": now,
 		"Health": health, "State": a.Store.State(), "Eval": a.Node.EvalStatus(), "Peers": a.Store.Peers(),
-		"StatusIO": sio,
+		"StatusIO": sio, "Webhooks": wh,
 	})
 }
 

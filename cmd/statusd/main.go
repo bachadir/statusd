@@ -24,10 +24,12 @@ import (
 	"statusd/internal/api"
 	"statusd/internal/catalog"
 	"statusd/internal/collector"
+	"statusd/internal/model"
 	"statusd/internal/node"
 	"statusd/internal/statusio"
 	"statusd/internal/store"
 	"statusd/internal/view"
+	"statusd/internal/webhook"
 )
 
 var version = "dev"
@@ -92,8 +94,9 @@ func run(cfgPath string, witnessFlag, checkOnly bool, log *slog.Logger) error {
 	log = log.With("node", cfg.Node.ID)
 
 	var (
-		col *collector.Collector
-		cat *catalog.Catalog
+		col   *collector.Collector
+		cat   *catalog.Catalog
+		hooks []*webhook.Config
 	)
 	if !cfg.Node.Witness {
 		col, err = collector.New(cfg.Sources)
@@ -109,6 +112,9 @@ func run(cfgPath string, witnessFlag, checkOnly bool, log *slog.Logger) error {
 			n += len(g.Components)
 		}
 		log.Info("catalogue loaded", "groups", len(cat.Groups), "components", n)
+		if hooks, err = webhook.Load(cfg.Webhooks, func(s string) bool { return model.Status(s).Valid() }); err != nil {
+			return err
+		}
 	}
 	if checkOnly {
 		fmt.Println("config and catalogue OK")
@@ -223,6 +229,14 @@ func run(cfgPath string, witnessFlag, checkOnly bool, log *slog.Logger) error {
 			go sio.Run(ctx)
 		}
 
+		if len(hooks) > 0 {
+			wh := webhook.NewDispatcher(hooks, cat, vb.Resolve, webhookStore{st, cfg.Evaluation.Interval},
+				webhook.PageRef{Name: cfg.PageName, URL: cfg.Public.URL}, version, log)
+			wh.RegisterMetrics(reg)
+			deps.Webhooks = wh
+			go wh.Run(ctx)
+		}
+
 		adm, err := admin.New(ctx, cfg.Admin, deps)
 		if err != nil {
 			return fmt.Errorf("admin: %w", err)
@@ -281,4 +295,18 @@ func printStatusioMap(cfgPath string) error {
 	}
 	statusio.WriteMapping(os.Stdout, cat, statusio.Match(cat, page))
 	return nil
+}
+
+// webhookStore keeps webhook delivery state in raft.
+type webhookStore struct {
+	*store.Store
+	timeout time.Duration
+}
+
+func (w webhookStore) Record(name string, statuses map[string]model.Status) error {
+	cmd, err := store.NewCommand(store.CmdWebhookDelivered, time.Now().Unix(), "", store.WebhookDelivered{Webhook: name, Statuses: statuses})
+	if err != nil {
+		return err
+	}
+	return w.Store.Apply(cmd, w.timeout)
 }

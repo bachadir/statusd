@@ -23,6 +23,7 @@ const (
 	CmdDeleteMaintenance  = "delete_maintenance"
 	CmdUpsertAnnouncement = "upsert_announcement"
 	CmdDeleteAnnouncement = "delete_announcement"
+	CmdWebhookDelivered   = "webhook_delivered"
 )
 
 // Settings keys.
@@ -44,6 +45,25 @@ func NewCommand(typ string, ts int64, actor string, data any) (Command, error) {
 		return Command{}, err
 	}
 	return Command{Type: typ, TS: ts, Actor: actor, Data: b}, nil
+}
+
+// WebhookDelivered records the statuses a webhook now knows about (after a
+// successful delivery, or as the silent baseline for new components).
+type WebhookDelivered struct {
+	Webhook  string                  `json:"webhook"`
+	Statuses map[string]model.Status `json:"statuses"` // component ID -> status
+}
+
+func (w *WebhookDelivered) Validate() error {
+	if w.Webhook == "" {
+		return verr("webhook name is required")
+	}
+	for c, st := range w.Statuses {
+		if c == "" || !st.Valid() {
+			return verr("webhook %s: bad status %q for %q", w.Webhook, st, c)
+		}
+	}
+	return nil
 }
 
 // TickComponent is one component's evaluation in a tick.

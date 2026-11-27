@@ -159,3 +159,42 @@ func TestNotLeader(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestWebhookStateSurvivesSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	addr := freePort(t)
+	s := openSingle(t, dir, addr)
+	t0 := int64(1_800_000_000)
+	mustApply(t, s, CmdWebhookDelivered, t0, "", WebhookDelivered{Webhook: "ops", Statuses: map[string]model.Status{"g/a": model.Operational, "g/b": model.Operational}})
+	if err := s.Snapshot(); err != nil {
+		t.Fatal(err)
+	}
+	mustApply(t, s, CmdWebhookDelivered, t0+60, "", WebhookDelivered{Webhook: "ops", Statuses: map[string]model.Status{"g/a": model.MajorOutage}})
+	c, _ := NewCommand(CmdWebhookDelivered, t0+70, "", WebhookDelivered{Webhook: "ops", Statuses: map[string]model.Status{"g/a": "bogus"}})
+	if err := s.Apply(c, 5*time.Second); err == nil {
+		t.Fatal("bad status accepted")
+	}
+	if a, _ := s.Audit(10); len(a) != 0 {
+		t.Fatalf("webhook bookkeeping must not be audited: %v", a)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s2 := openSingle(t, dir, addr)
+	defer s2.Close()
+	want := map[string]model.Status{"g/a": model.MajorOutage, "g/b": model.Operational}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got, _ := s2.WebhookState("ops")
+		if len(got) == 2 && got["g/a"] == want["g/a"] && got["g/b"] == want["g/b"] {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("webhook state not restored: %v", got)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if other, _ := s2.WebhookState("chat"); len(other) != 0 {
+		t.Fatalf("state leaked across webhooks: %v", other)
+	}
+}
