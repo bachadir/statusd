@@ -1,0 +1,27 @@
+# Single-node demo with simulated Prometheus data (cmd/fakeprom):
+#   docker compose -f deploy/demo/docker-compose.yml up -d --build
+# Public page: http://localhost:8090   Control panel: http://localhost:8091 (auth disabled: demo only)
+# Simulate an outage:  echo 0 > deploy/demo/state/probe   (probes fail in every region)
+#                      echo 0 > deploy/demo/state/value   (promql signals go bad)
+#                      echo 7200 > deploy/demo/state/serial_lag   (DNS zone two hours old)
+# Back to normal: rm deploy/demo/state/*
+# Other ports: DEMO_PORT=18090 DEMO_ADMIN_PORT=18091 docker compose ... up -d
+name: statusd-demo
+services:
+  fakeprom:
+    build: {context: ../.., dockerfile: Dockerfile}
+    image: statusd:demo
+    entrypoint: ["/usr/local/bin/fakeprom"]
+    command: []
+    environment: {STATE_DIR: /state}
+    volumes: ["./state:/state:ro"]
+  statusd:
+    image: statusd:demo
+    depends_on: [fakeprom]
+    command: ["-config", "/etc/statusd/statusd.yaml"]
+    ports: ["127.0.0.1:${DEMO_PORT:-8090}:8080", "127.0.0.1:${DEMO_ADMIN_PORT:-8091}:8081"]
+    volumes:
+      - ./statusd.yaml:/etc/statusd/statusd.yaml:ro
+      - ../../web/public:/srv/web:ro
+      - demo-data:/data
+volumes: {demo-data: {}}

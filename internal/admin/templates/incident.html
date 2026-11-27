@@ -1,0 +1,44 @@
+{{define "content"}}
+{{$u := .User}}{{$i := .Data.Inc}}{{$new := .Data.New}}
+<p><a href="/incidents">← Incidents</a></p>
+<h1>{{if $new}}New incident{{else}}{{$i.Title}} <span class="pill st-{{$i.State}}">{{$i.State}}</span>{{end}}</h1>
+{{if not $new}}
+<section class="card">
+  <h2>Timeline (public)</h2>
+  {{range $i.Updates}}<div class="update"><b class="st-{{.State}}">{{.State}}</b> <span class="muted">{{ts .TS}} · {{.Author}}</span><p class="pre">{{.Body}}</p></div>{{end}}
+  {{if canEdit $u}}
+  <form method="post" action="/incidents/{{$i.ID}}/updates" class="stack">
+    <input type="hidden" name="csrf" value="{{$u.CSRF}}">
+    <label>New state <select name="state">{{range incStates}}<option value="{{.}}" {{if eq . $i.State}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+    <label>Update (public) <textarea name="body" rows="4" required></textarea></label>
+    <button class="primary">Post update</button>
+  </form>{{end}}
+</section>
+{{end}}
+{{if canEdit $u}}
+<section class="card">
+  <h2>{{if $new}}Details{{else}}Edit details{{end}}</h2>
+  <form method="post" action="{{if $new}}/incidents{{else}}/incidents/{{$i.ID}}{{end}}" class="stack">
+    <input type="hidden" name="csrf" value="{{$u.CSRF}}">
+    <label>Title (public) <input name="title" value="{{$i.Title}}" required maxlength="200"></label>
+    <label>Impact <select name="impact">{{range impacts}}<option {{if eq . $i.Impact}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+    {{if $new}}
+    <label>State <select name="state">{{range incStates}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>
+    <label>First update (public) <textarea name="body" rows="4" required placeholder="We are investigating reports of …"></textarea></label>
+    {{end}}
+    <label>Postmortem URL (optional) <input name="postmortem_url" type="url" value="{{$i.PostmortemURL}}" placeholder="https://"></label>
+    <fieldset><legend>Affected components</legend>
+      <p class="muted">Linking components shows the incident next to them. To change a component's status, use its manual status control.</p>
+      {{range .Data.Cat.Groups}}<details {{range .Components}}{{if has $i.Components .ID}}open{{end}}{{end}}><summary>{{.Name}}</summary>
+        {{range .Components}}<label class="check"><input type="checkbox" name="components" value="{{.ID}}" {{if has $i.Components .ID}}checked{{end}}> {{.Name}}</label>{{end}}
+      </details>{{end}}
+    </fieldset>
+    <button class="primary">{{if $new}}Publish incident{{else}}Save{{end}}</button>
+  </form>
+</section>
+{{if and (not $new) (isAdmin $u)}}
+<form method="post" action="/incidents/{{$i.ID}}/delete" data-confirm="Delete this incident permanently? Prefer resolving it.">
+  <input type="hidden" name="csrf" value="{{$u.CSRF}}"><button class="danger">Delete incident</button></form>
+{{end}}
+{{end}}
+{{end}}

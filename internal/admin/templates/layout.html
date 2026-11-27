@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · Status control panel</title>
+<link rel="stylesheet" href="/static/admin.css">
+<script src="/static/admin.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/">Status control panel</a>
+  <nav>
+    <a href="/" {{if eq .Nav "dashboard" "component"}}class="on"{{end}}>Components</a>
+    <a href="/incidents" {{if eq .Nav "incidents" "incident"}}class="on"{{end}}>Incidents</a>
+    <a href="/maintenances" {{if eq .Nav "maintenances" "maintenance"}}class="on"{{end}}>Maintenances</a>
+    <a href="/announcements" {{if eq .Nav "announcements" "announcement"}}class="on"{{end}}>Announcements</a>
+    <a href="/audit" {{if eq .Nav "audit"}}class="on"{{end}}>Audit log</a>
+    {{if isAdmin .User}}<a href="/settings" {{if eq .Nav "settings"}}class="on"{{end}}>Settings</a>{{end}}
+  </nav>
+  <div class="who">
+    {{with .User}}<span title="role: {{.Role}}">{{.Actor}} · {{.Role}}</span>
+    <form method="post" action="/auth/logout" class="inline"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="link">Log out</button></form>{{end}}
+  </div>
+</header>
+<div class="clusterbar">
+  node <b>{{.Cluster.Node}}</b> ({{.Cluster.RaftState}}) · leader <b>{{if .Cluster.Leader}}{{.Cluster.Leader}}{{else}}<span class="bad">none</span>{{end}}</b>
+  · last evaluation <b {{if .Cluster.Stale}}class="bad"{{end}}>{{ago .Cluster.LastTick}}</b>
+  {{if .Cluster.Paused}} · <span class="warnpill">automation paused</span>{{end}}
+  <span class="ver">{{.Cluster.Version}}</span>
+</div>
+{{if .Cluster.Stale}}<div class="banner bad">Evaluation data is stale. The public page shows a stale-data banner. Check the leader and Prometheus sources.</div>{{end}}
+{{if not .Cluster.Leader}}<div class="banner bad">No raft leader: the cluster can't accept changes right now.</div>{{end}}
+<main>
+{{with .Flash}}<div class="flash">{{.}}</div>{{end}}
+{{template "content" .}}
+</main>
+<footer>Times are UTC. <span class="localtime" data-now></span></footer>
+</body>
+</html>

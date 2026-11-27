@@ -1,0 +1,6 @@
+apiVersion: v2
+name: statusd
+description: statusd status page backend (one full raft node per DC cluster)
+type: application
+version: 0.5.0
+appVersion: "0.4.0"

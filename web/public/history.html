@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>History · Status</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body data-page="history">
+<header class="site">
+  <div class="wrap">
+    <a class="logo" href="./"><img src="assets/logo.svg" width="168" height="36" alt="statusd"><span>Status</span></a>
+    <nav><a href="./">Status</a><a href="history.html" aria-current="page">History</a></nav>
+  </div>
+</header>
+<main class="wrap" id="main">
+  <noscript><div class="notice warn">This page needs JavaScript.</div></noscript>
+  <div class="monthnav"><a id="prev" href="#">← Older</a><h1 id="month">History</h1><a id="next" href="#" hidden>Newer →</a></div>
+  <section id="hist-incidents" class="block"><h2>Incidents</h2><div class="list"></div></section>
+  <section id="hist-maint" class="block"><h2>Maintenance</h2><div class="list"></div></section>
+</main>
+<footer class="wrap site-footer"><p>Times are shown in your local time zone (<span id="tz"></span>).</p></footer>
+</body>
+</html>

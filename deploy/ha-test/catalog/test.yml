@@ -1,0 +1,14 @@
+group: {slug: test, name: "HA test", order: 1}
+components:
+  - slug: probed
+    name: "Probed service"
+    hysteresis: {down_after: 2, up_after: 2}
+    signals:
+      - {name: probes, kind: probe_vote, source: prom, check: 'x_.*'}
+  - slug: metric
+    name: "Metric service"
+    hysteresis: {down_after: 2, up_after: 2}
+    signals:
+      - {name: value, kind: promql, source: prom, expr: 'up', ok: ">=0.5"}
+  - slug: manual
+    name: "Manual service"

@@ -1,0 +1,53 @@
+{{define "content"}}
+{{$r := .Data.Row}}{{$u := .User}}
+<p><a href="/">← Components</a></p>
+<h1>{{$r.C.Group.Name}} — {{$r.C.Name}}</h1>
+<p>Published: <span class="pill s-{{$r.Status}}">{{label $r.Status}}</span> since {{ts $r.Since}} · source <b>{{$r.Source}}</b>
+ {{if $r.C.Automated}}· automatic status <b>{{label $r.State.AutoStatus}}</b> · raw <span class="lv-{{level $r.State.RawLevel}}">{{level $r.State.RawLevel}}</span>
+ · hysteresis down after {{$r.C.Hysteresis.DownAfter}}, up after {{$r.C.Hysteresis.UpAfter}} evaluations{{else}}· <span class="muted">no automated signals: status is set by hand only</span>{{end}}</p>
+{{with $r.C.Note}}<div class="banner">{{.}}</div>{{end}}
+
+<div class="grid2">
+<section class="card">
+  <h2>Manual status</h2>
+  {{with $r.State.Override}}
+    <p>Override active: <b>{{label .Status}}</b> by {{.By}} at {{ts .SetAt}}{{if .Expires}}, expires {{ts .Expires}}{{else}}, until cleared (manual mode){{end}}.<br>Reason: {{.Reason}}</p>
+    {{if canEdit $u}}<form method="post" action="/components/{{$r.C.ID}}/clear"><input type="hidden" name="csrf" value="{{$u.CSRF}}">
+      <button>Return to automatic</button></form>{{end}}
+  {{else}}<p class="muted">No override: the published status is {{if $r.C.Automated}}automatic{{else}}operational by default{{end}}.</p>{{end}}
+  {{if canEdit $u}}
+  <form method="post" action="/components/{{$r.C.ID}}/override" class="stack">
+    <input type="hidden" name="csrf" value="{{$u.CSRF}}">
+    <label>Status <select name="status">{{range statuses}}<option value="{{.}}">{{label .}}</option>{{end}}</select></label>
+    <label>Keep for <select name="expires">
+      <option value="never">until cleared (switch to manual)</option><option value="15m">15 minutes</option><option value="1h">1 hour</option>
+      <option value="4h">4 hours</option><option value="24h">24 hours</option><option value="7d">7 days</option></select></label>
+    <label>Reason (internal, audited) <input name="reason" required maxlength="500"></label>
+    <button class="primary">Set status</button>
+  </form>
+  <p><a href="/incidents/new?component={{pathEsc $r.C.ID}}">Open an incident for this component</a></p>
+  {{end}}
+</section>
+<section class="card">
+  <h2>Why: signals at the last evaluation</h2>
+  {{if $r.Signals}}
+  <table class="compact">
+    <tr><th>Signal</th><th>Kind</th><th>Level</th><th>Detail</th></tr>
+    {{range $r.Signals}}<tr><td>{{.Name}}</td><td>{{.Kind}}</td><td><span class="lv-{{level .Level}}">{{level .Level}}</span></td>
+      <td>{{.Detail}}{{with .Error}}<br><span class="err">{{.}}</span>{{end}}</td></tr>{{end}}
+  </table>
+  <p class="muted">Evaluated {{ago $r.State.LastTick}}.</p>
+  {{else}}<p class="muted">No signal data.</p>{{end}}
+  {{if or $r.C.Signals $r.C.Freshness}}<h3>Definitions</h3>
+  <ul class="defs">{{range $r.C.Signals}}<li><b>{{.Name}}</b> ({{.Kind}}, {{.Source}}{{if eq .MaxLevel "degraded"}}, degraded at most{{end}}{{if .SerialFormat}}, {{.Aggregate}} of {{.SerialFormat}} serials{{end}}): <code>{{if .Expr}}{{.Expr}}{{else}}{{.ProbeQuery}}{{end}}</code>{{with .Link}} · <a href="{{.}}" target="_blank" rel="noopener">Grafana</a>{{end}}</li>{{end}}
+  {{with $r.C.Freshness}}<li><b>freshness</b> ({{.Source}}{{if not .Affects}}, display only{{end}}): <code>{{.Expr}}</code></li>{{end}}</ul>{{end}}
+</section>
+</div>
+
+<section class="card">
+  <h2>Status history (90 days)</h2>
+  <table class="compact"><tr><th>Since</th><th>Status</th><th>Source</th></tr>
+  {{range .Data.Changes}}<tr><td>{{ts .TS}}</td><td><span class="pill s-{{.Status}}">{{.Status}}</span></td><td>{{.Source}}</td></tr>
+  {{else}}<tr><td colspan="3" class="muted">No changes recorded.</td></tr>{{end}}</table>
+</section>
+{{end}}

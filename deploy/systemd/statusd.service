@@ -1,0 +1,32 @@
+# statusd on a VM (full node or witness). Install the binary to /usr/local/bin/statusd,
+# the config to /etc/statusd/statusd.yaml and the catalogue to /etc/statusd/catalog.
+# Witness: set "node.witness: true" in the config (or add -witness to ExecStart).
+[Unit]
+Description=statusd status page backend
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=statusd
+Group=statusd
+ExecStart=/usr/local/bin/statusd -config /etc/statusd/statusd.yaml -log-json
+EnvironmentFile=-/etc/statusd/statusd.env
+Restart=always
+RestartSec=2
+StateDirectory=statusd
+StateDirectoryMode=0700
+LimitNOFILE=65536
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/var/lib/statusd
+
+[Install]
+WantedBy=multi-user.target

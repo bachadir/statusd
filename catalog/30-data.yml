@@ -1,0 +1,37 @@
+# Data freshness: `freshness` is the data age shown next to a component (public: false keeps it
+# staff-only). Its expr returns ages in seconds, or with serial_format, DNS SOA serials.
+group: {slug: data, name: "Data Delivery", order: 30}
+defaults:
+  hysteresis: {down_after: 3, up_after: 5}
+components:
+  - slug: exports
+    name: "Daily Exports"
+    note: "Internal note, shown in the control panel only: exports run hourly from the batch cluster."
+    freshness:
+      source: prom
+      expr: 'time() - max(export_last_success_timestamp_seconds)'
+      degraded_after: 2h
+      down_after: 6h
+  - slug: dns-zone
+    name: "DNS Zone"
+    signals:
+      - {name: ns-probes, kind: probe_vote, source: prom, check: 'dns_soa'}
+      # serial_age: one SOA serial per server (e.g. a DNS prober exporting probe_dns_serial).
+      # oldest = any stale server counts; median = what a typical client sees; freshest = stale
+      # only when every server is.
+      - name: zone-age
+        kind: serial_age
+        source: prom
+        expr: 'probe_dns_serial{check="dns_soa"}'
+        serial_format: unix                   # or yymmddhhmm
+        aggregate: oldest
+        degraded_after: 20m
+        down_after: 1h
+        max_level: degraded
+    freshness:
+      source: prom
+      expr: 'probe_dns_serial{check="dns_soa"}'
+      serial_format: unix
+      aggregate: median
+      degraded_after: 30m
+      down_after: 3h

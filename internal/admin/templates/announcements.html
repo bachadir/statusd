@@ -1,0 +1,13 @@
+{{define "content"}}
+<h1>Announcements</h1>
+<p class="muted">Notices shown as a banner at the top of the public page (for example a product change or a planned deprecation).</p>
+{{if canEdit .User}}<p><a class="btn primary" href="/announcements/new">New announcement</a></p>{{end}}
+{{$now := .Data.Now}}
+<table>
+<tr><th>Title</th><th>Level</th><th>Shown</th><th>From</th><th>Until</th></tr>
+{{range .Data.List}}
+<tr><td><a href="/announcements/{{.ID}}">{{.Title}}</a></td><td><span class="pill an-{{.Level}}">{{.Level}}</span></td>
+<td>{{if .ActiveAt $now}}<span class="ok">yes</span>{{else}}no{{end}}</td><td>{{ts .Starts}}</td><td>{{if .Ends}}{{ts .Ends}}{{else}}until removed{{end}}</td></tr>
+{{else}}<tr><td colspan="5" class="muted">No announcements.</td></tr>{{end}}
+</table>
+{{end}}

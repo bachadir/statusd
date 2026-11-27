@@ -1,0 +1,20 @@
+{{define "content"}}
+{{$u := .User}}{{$a := .Data.A}}{{$new := .Data.New}}
+<p><a href="/announcements">← Announcements</a></p>
+<h1>{{if $new}}New announcement{{else}}{{$a.Title}}{{end}}</h1>
+<form method="post" action="{{if $new}}/announcements{{else}}/announcements/{{$a.ID}}{{end}}" class="stack card">
+  <input type="hidden" name="csrf" value="{{$u.CSRF}}">
+  <label>Level <select name="level">{{range annLevels}}<option {{if eq . $a.Level}}selected{{end}}>{{.}}</option>{{end}}</select></label>
+  <label>Title (public) <input name="title" value="{{$a.Title}}" required maxlength="200"></label>
+  <label>Text (public) <textarea name="body" rows="4">{{$a.Body}}</textarea></label>
+  <div class="row">
+    <label>Show from (UTC) <input type="datetime-local" name="starts" value="{{tsInput $a.Starts}}" required data-utc></label>
+    <label>Until (UTC, empty = until removed) <input type="datetime-local" name="ends" value="{{tsInput $a.Ends}}" data-utc></label>
+  </div>
+  {{if canEdit $u}}<button class="primary">Save</button>{{end}}
+</form>
+{{if and (not $new) (canEdit $u)}}
+<form method="post" action="/announcements/{{$a.ID}}/delete" data-confirm="Remove this announcement?">
+  <input type="hidden" name="csrf" value="{{$u.CSRF}}"><button class="danger">Remove</button></form>
+{{end}}
+{{end}}

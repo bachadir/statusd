@@ -1,0 +1,25 @@
+# Local development: one node, admin login disabled. NEVER use dev_insecure_user in production.
+# Point sources.prom at your Prometheus, or run the stand-in: STATE_DIR=./data/fakeprom go run ./cmd/fakeprom
+node:
+  id: dev1
+  data_dir: ./data/dev1
+listen:
+  public: "127.0.0.1:8080"
+  admin: "127.0.0.1:8081"
+raft:
+  bind: "127.0.0.1:7000"
+  bootstrap: true
+evaluation:
+  interval: 60s   # shorter ticks make hysteresis more sensitive
+catalog_dir: ./catalog
+public:
+  cors_origins: ["*"]
+  cache_max_age: 15
+  static_dir: ./web/public
+sources:
+  prom:
+    endpoints:
+      - name: local
+        url: http://127.0.0.1:9090
+admin:
+  dev_insecure_user: dev@localhost

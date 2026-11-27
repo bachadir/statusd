@@ -1,0 +1,25 @@
+# Rendered by the nginx image's entrypoint (envsubst replaces only defined env vars, here
+# ${STATUSD_UPSTREAM}; nginx variables like $host stay as they are).
+server {
+    listen 8080;
+    server_tokens off;
+    root /usr/share/nginx/html;
+
+    # Same paths Cloudflare would forward to the tunnel: the public API and the health check.
+    location /api/ {
+        proxy_pass http://${STATUSD_UPSTREAM};
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 15s;
+    }
+    location = /healthz {
+        proxy_pass http://${STATUSD_UPSTREAM};
+    }
+
+    # The page itself: no-cache so a new deploy shows up on reload.
+    location / {
+        try_files $uri $uri/ =404;
+        add_header Cache-Control "no-cache";
+    }
+}

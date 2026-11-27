@@ -1,0 +1,58 @@
+# Example Helm values: full node eu1. Use with
+#   helm upgrade --install statusd-eu1 deploy/helm/statusd -n statusd -f helm-values-eu1.yaml -f catalog-values.yaml
+# Secrets (create them first): statusd-secrets (cluster-key, session-key, oidc-client-secret,
+# grafana-token), statusd-tls-eu1 (ca.pem, node.pem, node-key.pem).
+role: node
+nodeId: eu1
+existingSecret: statusd-secrets
+tlsSecret: statusd-tls-eu1
+persistence: {size: 2Gi, storageClass: ""}
+adminIngress:
+  enabled: true
+  host: status-admin.example.net
+  className: nginx
+  annotations: {}
+
+# Optional: serve the public page from the cluster (nginx + web/public, API proxied to this node).
+publicUI:
+  enabled: false
+  service: {type: LoadBalancer, port: 80, loadBalancerIP: ""}
+
+clusterService:
+  type: LoadBalancer
+  loadBalancerIP: ""                  # a fixed IP behind statusd-eu1.example.net
+  loadBalancerSourceRanges: []        # restrict to the other members' addresses (and any NAT ranges between DCs)
+
+config:
+  node: {id: eu1, data_dir: /var/lib/statusd}
+  page_name: "Example Status"
+  listen: {public: ":8080", admin: ":8081", internal: ":8443"}
+  raft:
+    bind: ":7000"
+    advertise: "statusd-eu1.example.net:7000"
+    bootstrap: true
+    tls: {ca_file: /etc/statusd/tls/ca.pem, cert_file: /etc/statusd/tls/node.pem, key_file: /etc/statusd/tls/node-key.pem, server_name: statusd}
+    peers:
+      - {id: eu1, address: "statusd-eu1.example.net:7000", api: "https://statusd-eu1.example.net:8443"}
+      - {id: us1, address: "statusd-us1.example.net:7000", api: "https://statusd-us1.example.net:8443"}
+      - {id: witness, address: "statusd-witness.example.net:7000", api: "https://statusd-witness.example.net:8443", witness: true}
+  cluster_key_file: /etc/statusd/secrets/cluster-key
+  evaluation: {interval: 60s, retention_days: 90, leadership_transfer: true}
+  public: {cors_origins: ["https://status.example.com"], cache_max_age: 30, stale_after: 5m}
+  sources:
+    prom:
+      endpoints:
+        - {name: direct, url: "http://prometheus.monitoring.svc:9090"}
+  admin:
+    base_url: "https://status-admin.example.net"
+    session_key_file: /etc/statusd/secrets/session-key
+    session_ttl: 12h
+    oidc:
+      issuer: "https://idp.example.com/application/o/statusd/"
+      client_id: statusd
+      client_secret_file: /etc/statusd/secrets/oidc-client-secret
+      scopes: [openid, profile, email]
+      groups_claim: groups
+      viewer_groups: [status-viewer]
+      editor_groups: [status-editor]
+      admin_groups: [status-admin]

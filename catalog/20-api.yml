@@ -1,0 +1,34 @@
+# promql signals: any instant query, compared with `ok` / `degraded` thresholds (anything else is
+# down). `empty` decides what "no series" means (default no_data: never published as green or red).
+group: {slug: api, name: "API", order: 20}
+defaults:
+  hysteresis: {down_after: 3, up_after: 5}
+components:
+  - slug: public
+    name: "Public API"
+    signals:
+      - {name: api-probes, kind: probe_vote, source: prom, check: 'api_.*'}
+      - name: success-ratio                   # share of non-5xx responses over 5 minutes
+        kind: promql
+        source: prom
+        expr: 'sum(rate(http_requests_total{job="api",code!~"5.."}[5m])) / sum(rate(http_requests_total{job="api"}[5m]))'
+        ok: ">=0.99"
+        degraded: ">=0.95"
+        empty: ok                             # no traffic is not an outage
+  - slug: auth
+    name: "Authentication"
+    degraded_as: partial_outage               # publish "degraded" as a partial outage here
+    signals:
+      - name: instances-up
+        kind: promql
+        source: prom
+        expr: 'avg(up{job="auth"})'
+        ok: ">=0.66"
+        degraded: ">0"
+      - name: login-latency-p95               # soft signal: can degrade, never takes the component down
+        kind: promql
+        source: prom
+        expr: 'histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job="auth",handler="/login"}[5m])))'
+        ok: "<2"                              # seconds
+        degraded: ">=0"
+        max_level: degraded

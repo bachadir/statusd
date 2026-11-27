@@ -1,0 +1,21 @@
+# Example catalogue: replace these files with your own services. One file per group.
+#
+# probe_vote signals read blackbox-style probe results:
+#   probe_success{check="<name>", probe_region="eu|us|apac", ...}
+# e.g. blackbox_exporter run from several regions, with the labels "check" (what is probed) and
+# "probe_region" (where from) added by relabelling. A region fails when its worst target's success
+# ratio over `window` (default 10m) is below `fail_below` (default 0.5); 1 failing region =
+# degraded, 2 or more = down, fewer than `min_regions` (default 2) reporting = no data.
+group: {slug: website, name: "Website", order: 10}
+defaults:
+  hysteresis: {down_after: 3, up_after: 5}   # 3 bad ticks to publish worse, 5 good ticks to recover
+components:
+  - slug: www
+    name: "Website"
+    description: "www.example.com"
+    signals:
+      - {name: https-probes, kind: probe_vote, source: prom, check: 'www_https'}
+  - slug: docs
+    name: "Documentation"
+    signals:
+      - {name: https-probes, kind: probe_vote, source: prom, check: 'docs_https'}

@@ -1,0 +1,109 @@
+{{- $witness := include "statusd.isWitness" . | eq "true" }}
+{{- $catalogMounted := and (not $witness) (ne (include "statusd.catalogMode" .) "image") }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}
+  labels: {app: statusd, release: {{ .Release.Name | quote }}, role: {{ .Values.role | quote }}}
+spec:
+  replicas: 1   # exactly one raft member per release
+  serviceName: {{ .Release.Name }}
+  selector:
+    matchLabels: {app: statusd, release: {{ .Release.Name | quote }}}
+  template:
+    metadata:
+      labels: {app: statusd, release: {{ .Release.Name | quote }}, role: {{ .Values.role | quote }}}
+      annotations:
+        checksum/config: {{ include "statusd.config" . | sha256sum }}
+        {{- if not $witness }}
+        checksum/catalog: {{ include "statusd.catalogChecksum" . | quote }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      securityContext: {{ toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 20
+      {{- $aa := .Values.antiAffinity }}
+      {{- if or $aa.enabled .Values.affinity }}
+      affinity:
+        {{- with .Values.affinity }}
+        {{- toYaml (omit . "podAntiAffinity") | nindent 8 }}
+        {{- end }}
+        {{- if $aa.enabled }}
+        podAntiAffinity:
+          {{- $term := dict "topologyKey" $aa.topologyKey "labelSelector" (dict "matchLabels" (dict "app" "statusd")) }}
+          {{- if $aa.required }}
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - {{ toYaml $term | nindent 14 | trim }}
+          {{- else }}
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm: {{- toYaml $term | nindent 16 }}
+          {{- end }}
+        {{- else if (.Values.affinity).podAntiAffinity }}
+        podAntiAffinity: {{- toYaml .Values.affinity.podAntiAffinity | nindent 10 }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: statusd
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["-config", "/etc/statusd/statusd.yaml", "-log-json"]
+          ports:
+            {{- if not $witness }}
+            - {name: public, containerPort: 8080}
+            {{- end }}
+            - {name: admin, containerPort: 8081}
+            - {name: internal, containerPort: 8443}
+            - {name: raft, containerPort: 7000}
+          {{- if $witness }}
+          readinessProbe:   # a witness only votes; ready once its cluster API listens
+            tcpSocket: {port: internal}
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: {port: internal}
+            periodSeconds: 20
+          {{- else }}
+          readinessProbe:   # not ready = no leader or stale data; the tunnel/LB stop sending traffic
+            httpGet: {path: /healthz, port: public}
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:    # process alive; never tie liveness to raft health
+            tcpSocket: {port: admin}
+            periodSeconds: 20
+          {{- end }}
+          resources: {{ toYaml .Values.resources | nindent 12 }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: config, mountPath: /etc/statusd/statusd.yaml, subPath: statusd.yaml}
+            - {name: secrets, mountPath: /etc/statusd/secrets, readOnly: true}
+            - {name: tls, mountPath: /etc/statusd/tls, readOnly: true}
+            - {name: data, mountPath: /var/lib/statusd}
+            {{- if $catalogMounted }}
+            - {name: catalog, mountPath: {{ include "statusd.catalogDir" . }}, readOnly: true}
+            {{- end }}
+      volumes:
+        - {name: config, configMap: {name: {{ .Release.Name }}-config}}
+        - {name: secrets, secret: {secretName: {{ .Values.existingSecret }}}}
+        - {name: tls, secret: {secretName: {{ .Values.tlsSecret }}}}
+        {{- if $catalogMounted }}
+        - {name: catalog, configMap: {name: {{ include "statusd.catalogConfigMapName" . }}}}
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources: {requests: {storage: {{ .Values.persistence.size }}}}

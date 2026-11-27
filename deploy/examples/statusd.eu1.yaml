@@ -1,0 +1,63 @@
+# Example: full node "eu1" in the first datacenter. us1 is the same with its own id and
+# addresses. The witness only needs node, listen.internal, raft and the cluster key
+# (statusd.witness.yaml). Replace every example.com / example.net name with your own.
+node:
+  id: eu1
+  data_dir: /var/lib/statusd          # k8s: the PVC mount
+page_name: "Example Status"
+listen:
+  public: ":8080"                     # public page + API: the ONLY port to expose (e.g. through cloudflared)
+  admin: ":8081"                      # control panel + /metrics, internal network only
+  internal: ":8443"                   # cluster API (mTLS): write forwarding, peer health
+raft:
+  bind: ":7000"
+  advertise: "statusd-eu1.example.net:7000"
+  bootstrap: true                     # all three nodes use the same peer list
+  tls:                                # mutual TLS for raft and the internal API
+    ca_file: /etc/statusd/tls/ca.pem
+    cert_file: /etc/statusd/tls/node.pem   # SAN must include "statusd" (server_name)
+    key_file: /etc/statusd/tls/node-key.pem
+    server_name: statusd
+  peers:
+    - {id: eu1, address: "statusd-eu1.example.net:7000", api: "https://statusd-eu1.example.net:8443"}
+    - {id: us1, address: "statusd-us1.example.net:7000", api: "https://statusd-us1.example.net:8443"}
+    - {id: witness, address: "statusd-witness.example.net:7000", api: "https://statusd-witness.example.net:8443", witness: true}
+cluster_key_file: /etc/statusd/secrets/cluster-key
+evaluation:
+  interval: 60s
+  retention_days: 90
+  leadership_transfer: true           # hand leadership to the peer that can see more sources
+catalog_dir: /etc/statusd/catalog
+public:
+  cors_origins: ["https://status.example.com"]
+  cache_max_age: 30
+  stale_after: 5m
+# Each source tries its endpoints in order; a failing endpoint is skipped for 60s.
+# Catalogue signals refer to sources by name (here: "prom").
+sources:
+  prom:
+    endpoints:
+      - {name: direct, url: "http://prometheus.monitoring.svc:9090", timeout: 10s}
+      # Optional fallback: a Grafana datasource proxy with a read-only service account token.
+      - {name: grafana, url: "https://grafana.example.net/api/datasources/proxy/uid/<datasource-uid>", bearer_token_file: /etc/statusd/secrets/grafana-token}
+admin:
+  base_url: "https://status-admin.example.net"         # this node's control panel URL
+  session_key_file: /etc/statusd/secrets/session-key   # >= 32 bytes, SAME on both full nodes
+  session_ttl: 12h
+  oidc:                               # any OIDC provider (Keycloak, authentik, Dex, Okta, ...)
+    issuer: "https://idp.example.com/application/o/statusd/"
+    client_id: statusd
+    client_secret_file: /etc/statusd/secrets/oidc-client-secret
+    scopes: [openid, profile, email]
+    groups_claim: groups
+    viewer_groups: [status-viewer]
+    editor_groups: [status-editor]
+    admin_groups: [status-admin]
+
+# Optional: mirror published statuses to a Status.io page (README, "Feeding Status.io").
+statusio:
+  enabled: false
+  dry_run: true
+  statuspage_id: 000000000000000000000000
+  api_id_file: /etc/statusd/secrets/statusio-api-id
+  api_key_file: /etc/statusd/secrets/statusio-api-key

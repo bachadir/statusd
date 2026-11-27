@@ -1,0 +1,19 @@
+{{define "content"}}
+{{$u := .User}}
+<h1>Settings</h1>
+<section class="card">
+  <h2>Automation</h2>
+  <p>Pausing automation freezes every component's automatic status at its current value. Evaluation keeps running (so the "why" view stays current), overrides and maintenances keep working, and nothing changes on the public page by itself until you resume.</p>
+  <form method="post" action="/settings" class="stack">
+    <input type="hidden" name="csrf" value="{{$u.CSRF}}">
+    {{if .Cluster.Paused}}<input type="hidden" name="automation_paused" value="0"><button class="primary">Resume automation</button>
+    {{else}}<input type="hidden" name="automation_paused" value="1"><button class="danger">Pause automation</button>{{end}}
+  </form>
+</section>
+<section class="card">
+  <h2>Cluster members</h2>
+  <table class="compact"><tr><th>ID</th><th>Raft address</th><th>Internal API</th><th>Role</th></tr>
+  {{range .Data.Peers}}<tr><td>{{.ID}}{{if eq .ID $.Data.State.Leader}} <span class="pill s-operational">leader</span>{{end}}</td><td>{{.Address}}</td><td>{{.API}}</td><td>{{if .Witness}}witness{{else}}full node{{end}}</td></tr>{{end}}
+  </table>
+</section>
+{{end}}

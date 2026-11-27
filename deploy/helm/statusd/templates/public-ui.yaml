@@ -1,0 +1,60 @@
+{{- /* Optional showcase of the public page inside the cluster (the real one runs on Cloudflare
+Pages): nginx with web/public, proxying /api/ and /healthz to this release's statusd. Full nodes
+only. The pods carry app: statusd-web, so the raft anti-affinity ignores them. */ -}}
+{{- if and .Values.publicUI.enabled (ne (include "statusd.isWitness" .) "true") }}
+{{- $ui := .Values.publicUI }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-web
+  labels: {app: statusd-web, release: {{ .Release.Name | quote }}}
+spec:
+  replicas: {{ $ui.replicas }}
+  selector:
+    matchLabels: {app: statusd-web, release: {{ .Release.Name | quote }}}
+  template:
+    metadata:
+      labels: {app: statusd-web, release: {{ .Release.Name | quote }}}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {runAsNonRoot: true}
+      containers:
+        - name: web
+          image: "{{ $ui.image.repository | default (printf "%s/web" .Values.image.repository) }}:{{ $ui.image.tag | default .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - {name: STATUSD_UPSTREAM, value: "{{ .Release.Name }}:8080"}
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /index.html, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /index.html, port: http}
+            periodSeconds: 30
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {{- toYaml $ui.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-web
+  labels: {app: statusd-web, release: {{ .Release.Name | quote }}}
+  {{- $ann := deepCopy (default dict $ui.service.annotations) }}
+  {{- with $ui.service.loadBalancerIP }}
+  {{- $_ := set $ann "metallb.universe.tf/loadBalancerIPs" . }}
+  {{- end }}
+  {{- with $ann }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $ui.service.type }}
+  {{- with $ui.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector: {app: statusd-web, release: {{ .Release.Name | quote }}}
+  ports:
+    - {name: http, port: {{ $ui.service.port }}, targetPort: http}
+{{- end }}

@@ -1,0 +1,42 @@
+# Local 3-node HA test: two full nodes (eu1, us1), a witness, and a fake Prometheus per DC.
+#   ./gen-certs.sh && docker compose up -d --build
+#   ./chaos.sh
+x-node: &node
+  image: statusd:ha-test
+  environment: {STATUSD_CLUSTER_KEY: test-cluster-key-please-change}
+  restart: unless-stopped
+services:
+  prom-eu:
+    image: statusd:ha-test
+    entrypoint: ["/usr/local/bin/fakeprom"]
+    environment: {STATE_DIR: /state}
+    volumes: ["./state/eu:/state"]
+    networks: [public]
+  prom-us:
+    image: statusd:ha-test
+    entrypoint: ["/usr/local/bin/fakeprom"]
+    environment: {STATE_DIR: /state}
+    volumes: ["./state/us:/state"]
+    networks: [public]
+  eu1:
+    <<: *node
+    build: {context: ../.., dockerfile: Dockerfile}
+    command: ["-config", "/etc/statusd/statusd.yaml"]
+    networks: {public: {gw_priority: 10}, cluster: {aliases: [eu1-raft]}}
+    volumes: ["./eu1.yaml:/etc/statusd/statusd.yaml:ro", "./catalog:/etc/statusd/test-catalog:ro", "./certs:/certs:ro", "eu1-data:/data"]
+    ports: ["18080:8080", "18081:8081"]
+  us1:
+    <<: *node
+    command: ["-config", "/etc/statusd/statusd.yaml"]
+    networks: {public: {gw_priority: 10}, cluster: {aliases: [us1-raft]}}
+    volumes: ["./us1.yaml:/etc/statusd/statusd.yaml:ro", "./catalog:/etc/statusd/test-catalog:ro", "./certs:/certs:ro", "us1-data:/data"]
+    ports: ["28080:8080", "28081:8081"]
+    depends_on: [eu1]
+  witness:
+    <<: *node
+    command: ["-config", "/etc/statusd/statusd.yaml"]
+    networks: {cluster: {aliases: [witness-raft]}}
+    volumes: ["./witness.yaml:/etc/statusd/statusd.yaml:ro", "./certs:/certs:ro", "witness-data:/data"]
+    depends_on: [eu1]
+volumes: {eu1-data: {}, us1-data: {}, witness-data: {}}
+networks: {public: {}, cluster: {}}

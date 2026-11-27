@@ -1,0 +1,21 @@
+# Witness on a small VM outside both datacenters: votes in raft, never evaluates or publishes.
+node:
+  id: witness
+  witness: true
+  data_dir: /var/lib/statusd
+listen:
+  internal: ":8443"
+  admin: "127.0.0.1:8081"            # /healthz and /metrics only
+raft:
+  bind: ":7000"
+  advertise: "statusd-witness.example.net:7000"
+  bootstrap: true
+  tls:
+    ca_file: /etc/statusd/tls/ca.pem
+    cert_file: /etc/statusd/tls/node.pem
+    key_file: /etc/statusd/tls/node-key.pem
+  peers:
+    - {id: eu1, address: "statusd-eu1.example.net:7000", api: "https://statusd-eu1.example.net:8443"}
+    - {id: us1, address: "statusd-us1.example.net:7000", api: "https://statusd-us1.example.net:8443"}
+    - {id: witness, address: "statusd-witness.example.net:7000", api: "https://statusd-witness.example.net:8443", witness: true}
+cluster_key_file: /etc/statusd/secrets/cluster-key

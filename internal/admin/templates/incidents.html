@@ -1,0 +1,11 @@
+{{define "content"}}
+<h1>Incidents</h1>
+{{if canEdit .User}}<p><a class="btn primary" href="/incidents/new">New incident</a></p>{{end}}
+<table>
+<tr><th>Title</th><th>State</th><th>Impact</th><th>Created</th><th>Resolved</th><th>Updates</th></tr>
+{{range .Data.List}}
+<tr><td><a href="/incidents/{{.ID}}">{{.Title}}</a></td><td><span class="pill st-{{.State}}">{{.State}}</span></td><td>{{.Impact}}</td>
+<td>{{ts .Created}}</td><td>{{ts .Resolved}}</td><td>{{len .Updates}}</td></tr>
+{{else}}<tr><td colspan="6" class="muted">No incidents yet.</td></tr>{{end}}
+</table>
+{{end}}

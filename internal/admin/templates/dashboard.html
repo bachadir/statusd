@@ -1,0 +1,73 @@
+{{define "content"}}
+{{$u := .User}}
+<div class="grid2">
+<section class="card">
+  <h2>Open incidents</h2>
+  {{range .Data.Open}}
+    <p><a href="/incidents/{{.ID}}"><b>{{.Title}}</b></a> <span class="pill st-{{.State}}">{{.State}}</span> <span class="muted">impact {{.Impact}} · updated {{ago .Updated}}</span></p>
+  {{else}}<p class="muted">No open incidents.</p>{{end}}
+  {{if canEdit $u}}<p><a class="btn" href="/incidents/new">New incident</a></p>{{end}}
+</section>
+<section class="card">
+  <h2>Maintenances (current and upcoming)</h2>
+  {{$now := .Data.Now}}
+  {{range .Data.Maint}}
+    <p><a href="/maintenances/{{.ID}}"><b>{{.Title}}</b></a> {{if and (le .Starts $now) (gt .Ends $now)}}<span class="pill s-under_maintenance">in progress</span>{{else}}<span class="pill">scheduled</span>{{end}}
+    <span class="muted">{{ts .Starts}} → {{ts .Ends}}</span></p>
+  {{else}}<p class="muted">None scheduled.</p>{{end}}
+  {{if canEdit $u}}<p><a class="btn" href="/maintenances/new">Schedule maintenance</a></p>{{end}}
+</section>
+</div>
+
+<section class="card">
+  <h2>Cluster</h2>
+  <table class="compact">
+    <tr><th>Node</th><th>Raft</th><th>Applied index</th><th>Last contact</th><th>Evaluation (this node)</th></tr>
+    <tr><td>{{.Data.State.NodeID}}</td><td>{{.Data.State.RaftState}} (term {{.Data.State.Term}})</td><td>{{.Data.State.AppliedIndex}}</td><td>{{.Data.State.LastContact}}</td>
+      <td>{{if .Data.Eval.Ticks}}{{.Data.Eval.Ticks}} ticks, last took {{dur .Data.Eval.LastEvalDur}}{{with .Data.Eval.LastError}} · <span class="bad">{{.}}</span>{{end}}{{else}}<span class="muted">not leader</span>{{end}}</td></tr>
+  </table>
+  <h3>Prometheus sources as seen from this node</h3>
+  <table class="compact">
+    <tr><th>Source</th><th>Healthy</th><th>Endpoint used</th><th>Last OK</th><th>Last error</th></tr>
+    {{range .Data.Health.Sources}}
+    <tr><td>{{.Source}}</td><td>{{if .Healthy}}<span class="ok">yes</span>{{else}}<span class="bad">no</span>{{end}}</td><td>{{.Endpoint}}</td><td>{{ts .LastOK}}</td><td class="err">{{.LastError}}</td></tr>
+    {{end}}
+  </table>
+  {{with .Data.StatusIO}}
+  <h3>Status.io feed{{if .DryRun}} <span class="pill">dry run</span>{{end}}</h3>
+  <p class="muted">Page {{.StatuspageID}} · {{.Mapped}} mapped components ·
+    {{if .Active}}publishing from this node · {{.Pending}} pending · last read of Status.io {{ts .LastReconcile}}{{else}}not leader: the leader publishes{{end}}
+    · last successful request {{ts .LastSuccess}}{{with .LastError}} · <span class="bad">{{.}}</span>{{end}}</p>
+  {{if .Recent}}
+  <table class="compact">
+    <tr><th>When</th><th>Component</th><th>Status</th><th>Code</th><th>Result</th></tr>
+    {{range .Recent}}
+    <tr><td>{{ts .At}}</td><td><a href="/components/{{.Component}}">{{.Component}}</a></td><td>{{label .Status}}</td><td>{{.Code}}</td>
+      <td>{{if .Error}}<span class="bad">{{.Error}}</span>{{else if .DryRun}}logged (dry run){{else}}<span class="ok">sent</span>{{end}}</td></tr>
+    {{end}}
+  </table>
+  {{end}}
+  {{end}}
+</section>
+
+{{range .Data.Groups}}
+<section class="card">
+  <h2>{{.G.Name}} <span class="pill s-{{.Worst}}">{{label .Worst}}</span></h2>
+  <table>
+    <tr><th>Component</th><th>Published</th><th>Source</th><th>Automatic</th><th>Raw now</th><th>Freshness</th><th>Override</th><th></th></tr>
+    {{range .Rows}}
+    <tr>
+      <td><a href="/components/{{.C.ID}}">{{.C.Name}}</a>{{if .C.Hidden}} <span class="muted">(hidden)</span>{{end}}</td>
+      <td><span class="pill s-{{.Status}}">{{label .Status}}</span><br><span class="muted">since {{ago .Since}}</span></td>
+      <td>{{.Source}}</td>
+      <td>{{if .C.Automated}}{{label .State.AutoStatus}}{{else}}<span class="muted">no signals</span>{{end}}</td>
+      <td>{{if .C.Automated}}<span class="lv-{{level .State.RawLevel}}">{{level .State.RawLevel}}</span>{{else}}—{{end}}</td>
+      <td>{{with .State.FreshAge}}{{dur (deref .)}}{{else}}—{{end}}</td>
+      <td>{{with .State.Override}}{{label .Status}}<br><span class="muted">{{.By}}{{if .Expires}}, until {{ts .Expires}}{{else}}, until cleared{{end}}</span>{{else}}—{{end}}</td>
+      <td>{{if canEdit $u}}<a href="/components/{{.C.ID}}">Change</a>{{end}}</td>
+    </tr>
+    {{end}}
+  </table>
+</section>
+{{end}}
+{{end}}

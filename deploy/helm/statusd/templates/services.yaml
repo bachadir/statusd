@@ -1,0 +1,37 @@
+{{- if ne (include "statusd.isWitness" .) "true" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+  labels: {app: statusd, node: {{ .Values.nodeId | quote }}}
+spec:
+  selector: {app: statusd, release: {{ .Release.Name | quote }}}
+  ports:
+    - {name: public, port: 8080, targetPort: 8080}   # cloudflared points here
+    - {name: admin, port: 8081, targetPort: 8081}    # internal ingress for the control panel
+---
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-cluster
+  labels: {app: statusd, node: {{ .Values.nodeId | quote }}}
+  {{- $ann := deepCopy (default dict .Values.clusterService.annotations) }}
+  {{- with .Values.clusterService.loadBalancerIP }}
+  {{- $_ := set $ann "metallb.universe.tf/loadBalancerIPs" . }}
+  {{- end }}
+  {{- with $ann }}
+  annotations: {{ toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.clusterService.type }}
+  # Raft peers must reach a member before it is Ready: a node only becomes Ready after it
+  # has joined the cluster, so routing to ready pods only would deadlock the join.
+  publishNotReadyAddresses: true
+  {{- with .Values.clusterService.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges: {{ toYaml . | nindent 4 }}
+  {{- end }}
+  selector: {app: statusd, release: {{ .Release.Name | quote }}}
+  ports:
+    - {name: raft, port: 7000, targetPort: 7000}
+    - {name: internal, port: 8443, targetPort: 8443}

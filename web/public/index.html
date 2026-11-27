@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status</title>
+<meta name="description" content="Current status, incidents and maintenance for our services.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="app.js" defer></script>
+</head>
+<body data-page="status">
+<header class="site">
+  <div class="wrap">
+    <a class="logo" href="./"><img src="assets/logo.svg" width="168" height="36" alt="statusd"><span>Status</span></a>
+    <nav><a href="./" aria-current="page">Status</a><a href="history.html">History</a></nav>
+  </div>
+</header>
+<main class="wrap" id="main" aria-live="polite">
+  <noscript><div class="notice warn">This page needs JavaScript to load the current status. The data is also available as JSON at <code>/api/v1/status.json</code>.</div></noscript>
+  <div id="stale" class="notice warn" hidden></div>
+  <div id="announcements"></div>
+  <section id="overall" class="overall loading"><span class="icon" aria-hidden="true"></span><div><h1>Loading current status…</h1><p class="updated"></p></div></section>
+  <section id="incidents"></section>
+  <section id="maintenance"></section>
+  <section id="groups" aria-label="Services"></section>
+  <section id="recent" class="block"></section>
+</main>
+<footer class="wrap site-footer">
+  <p>Times are shown in your local time zone (<span id="tz"></span>). <a href="history.html">Incident and maintenance history</a></p>
+</footer>
+</body>
+</html>

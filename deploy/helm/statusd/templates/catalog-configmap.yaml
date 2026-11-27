@@ -1,0 +1,15 @@
+{{- if and (ne (include "statusd.isWitness" .) "true") (eq (include "statusd.catalogMode" .) "files") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "statusd.catalogConfigMapName" . }}
+  labels: {app: statusd, release: {{ .Release.Name | quote }}}
+data:
+{{- range $name, $content := .Values.catalog.files }}
+  {{- if not (regexMatch "^[A-Za-z0-9._-]+\\.ya?ml$" $name) }}
+  {{- fail (printf "catalog.files: %q must be a plain *.yml/*.yaml file name" $name) }}
+  {{- end }}
+  {{ $name }}: |
+{{ $content | indent 4 }}
+{{- end }}
+{{- end }}

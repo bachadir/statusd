@@ -1,0 +1,9 @@
+# cloudflared tunnel in the EU DC (one per DC; us1 is identical with its own tunnel id).
+# Only the public, read-only API is routed. The admin UI, /metrics, raft and the internal API never are.
+tunnel: <EU1_TUNNEL_ID>
+credentials-file: /etc/cloudflared/eu1.json
+ingress:
+  - hostname: api-eu1.status.example.com      # origin for the Cloudflare Load Balancer pool
+    path: ^/(api/v1/.*|healthz)$
+    service: http://statusd-eu1:8080
+  - service: http_status:404

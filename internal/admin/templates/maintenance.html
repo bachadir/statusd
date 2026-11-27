@@ -1,0 +1,27 @@
+{{define "content"}}
+{{$u := .User}}{{$m := .Data.M}}{{$new := .Data.New}}
+<p><a href="/maintenances">← Maintenances</a></p>
+<h1>{{if $new}}Schedule maintenance{{else}}{{$m.Title}}{{end}}</h1>
+<p class="muted">Components in an active window show "Under maintenance" automatically (unless they have a manual override), and that time is left out of uptime.</p>
+<form method="post" action="{{if $new}}/maintenances{{else}}/maintenances/{{$m.ID}}{{end}}" class="stack card">
+  <input type="hidden" name="csrf" value="{{$u.CSRF}}">
+  <label>Title (public) <input name="title" value="{{$m.Title}}" required maxlength="200" {{if not (canEdit $u)}}disabled{{end}}></label>
+  <label>Details (public) <textarea name="body" rows="4">{{$m.Body}}</textarea></label>
+  <div class="row">
+    <label>Starts (UTC) <input type="datetime-local" name="starts" value="{{tsInput $m.Starts}}" required data-utc></label>
+    <label>Ends (UTC) <input type="datetime-local" name="ends" value="{{tsInput $m.Ends}}" required data-utc></label>
+  </div>
+  {{if not $new}}<label class="check"><input type="checkbox" name="cancelled" value="1" {{if $m.Cancelled}}checked{{end}}> Cancelled</label>{{end}}
+  <fieldset><legend>Affected components</legend>
+    {{range .Data.Cat.Groups}}<details {{range .Components}}{{if has $m.Components .ID}}open{{end}}{{end}}><summary>{{.Name}}</summary>
+      <label class="check"><input type="checkbox" data-all> <i>all in this group</i></label>
+      {{range .Components}}<label class="check"><input type="checkbox" name="components" value="{{.ID}}" {{if has $m.Components .ID}}checked{{end}}> {{.Name}}</label>{{end}}
+    </details>{{end}}
+  </fieldset>
+  {{if canEdit $u}}<button class="primary">Save</button>{{end}}
+</form>
+{{if and (not $new) (isAdmin $u)}}
+<form method="post" action="/maintenances/{{$m.ID}}/delete" data-confirm="Delete this maintenance? Prefer marking it cancelled.">
+  <input type="hidden" name="csrf" value="{{$u.CSRF}}"><button class="danger">Delete</button></form>
+{{end}}
+{{end}}

@@ -1,0 +1,27 @@
+{{- /* Control panel (admin port 8081) through the cluster's ingress controller. Full nodes
+only: a witness has no control panel. TLS is up to the ingress controller (cert-manager
+annotations, or a controller such as Caddy that obtains certificates itself). */ -}}
+{{- if and .Values.adminIngress.enabled (ne (include "statusd.isWitness" .) "true") }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-admin
+  labels: {app: statusd, node: {{ .Values.nodeId | quote }}}
+  {{- with .Values.adminIngress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.adminIngress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ required "adminIngress.host is required when adminIngress.enabled" .Values.adminIngress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}
+                port: {number: 8081}   # by number: the Caddy ingress controller (v0.2.1) cannot resolve port names
+{{- end }}

@@ -1,0 +1,26 @@
+# Demo node: one raft member, example catalogue, fakeprom as the only source, admin login
+# disabled. NEVER use dev_insecure_user in production.
+node:
+  id: demo
+  data_dir: /data
+page_name: "Example Status"
+listen:
+  public: ":8080"
+  admin: ":8081"
+raft:
+  bind: "127.0.0.1:7000"
+  bootstrap: true
+evaluation:
+  interval: 15s   # faster than production (60s), so the demo reacts within a minute
+catalog_dir: /etc/statusd/catalog
+public:
+  cors_origins: ["*"]
+  cache_max_age: 15
+  static_dir: /srv/web
+sources:
+  prom:
+    endpoints:
+      - name: fakeprom
+        url: http://fakeprom:9090
+admin:
+  dev_insecure_user: demo@localhost

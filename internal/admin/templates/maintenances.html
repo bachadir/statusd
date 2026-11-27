@@ -1,0 +1,13 @@
+{{define "content"}}
+<h1>Maintenances</h1>
+{{if canEdit .User}}<p><a class="btn primary" href="/maintenances/new">Schedule maintenance</a></p>{{end}}
+{{$now := .Data.Now}}
+<table>
+<tr><th>Title</th><th>State</th><th>Window (UTC)</th><th>Components</th></tr>
+{{range .Data.List}}
+<tr><td><a href="/maintenances/{{.ID}}">{{.Title}}</a></td>
+<td>{{if .Cancelled}}cancelled{{else if le .Ends $now}}completed{{else if le .Starts $now}}<span class="pill s-under_maintenance">in progress</span>{{else}}scheduled{{end}}</td>
+<td>{{ts .Starts}} → {{ts .Ends}}</td><td>{{len .Components}}</td></tr>
+{{else}}<tr><td colspan="4" class="muted">No maintenances.</td></tr>{{end}}
+</table>
+{{end}}

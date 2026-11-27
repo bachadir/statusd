@@ -1,0 +1,93 @@
+# One release per raft member: two full nodes (e.g. eu1, us1) and a witness (role: witness).
+# Example per-node values: deploy/examples/helm-values-*.yaml. Set image.tag per release.
+image:
+  repository: ghcr.io/OWNER/statusd
+  tag: "0.2.0"
+  pullPolicy: IfNotPresent
+imagePullSecrets: []        # e.g. [{name: statusd-registry}]
+
+# node: full member (evaluates, serves the API and control panel).
+# witness: votes in raft only; no catalogue, no public/admin Service, TCP probes.
+role: node
+nodeId: eu1
+
+podAnnotations: {}          # CI adds checksum/secrets so a secret change rolls the pod
+
+# Full statusd config (see deploy/examples/statusd.eu1.yaml). Secrets are referenced by
+# path and mounted from `existingSecret` at /etc/statusd/secrets and `tlsSecret` at /etc/statusd/tls.
+config: {}
+
+# Service catalogue (groups, components, signals). statusd reads it at startup only; any
+# change rolls the pod. Pick at most one; with neither, the copy baked into the image is used.
+catalog:
+  # 1) Rendered by the chart. Generate from the git catalogue:
+  #      deploy/helm/catalog-values.sh catalog/ > catalog-values.yaml
+  #      helm upgrade ... -f values-eu1.yaml -f catalog-values.yaml
+  files: {}
+  #   10-api.yml: |
+  #     group: {slug: api, name: "...", order: 10}
+  #     components: [...]
+  # 2) A ConfigMap managed outside the chart (CI, ArgoCD, kustomize), one key per *.yml file:
+  #      kubectl create configmap statusd-catalog --from-file=catalog/ --dry-run=client -o yaml | kubectl apply -f -
+  #    `helm upgrade` picks up its content hash; after changing only the ConfigMap, run
+  #    `kubectl rollout restart statefulset/<release>`.
+  existingConfigMap: ""
+
+existingSecret: statusd-secrets   # keys: cluster-key, session-key, oidc-client-secret, grafana-token
+tlsSecret: statusd-tls            # keys: ca.pem, node.pem, node-key.pem (plus any extra CA file your sources need)
+
+persistence:
+  size: 2Gi
+  storageClass: ""
+
+# Control panel (port 8081) through the cluster's ingress controller; full nodes only. Its host
+# must match config.admin.base_url and be a redirect URI of the OIDC client.
+adminIngress:
+  enabled: false
+  host: ""
+  className: ""       # spec.ingressClassName (some controllers, e.g. caddy-ingress, use the kubernetes.io/ingress.class annotation instead)
+  annotations: {}
+
+# Optional: serve the public page from the cluster (instead of, or before, Cloudflare Pages):
+# nginx serving web/public and proxying /api/ and /healthz to this release's statusd, so it
+# looks exactly like the Cloudflare setup. Full nodes only. Image: web/Dockerfile.
+publicUI:
+  enabled: false
+  replicas: 1
+  image:
+    repository: ""    # default: <image.repository>/web
+    tag: ""           # default: image.tag
+  service:
+    type: LoadBalancer
+    port: 80
+    loadBalancerIP: ""              # MetalLB IP (metallb.universe.tf/loadBalancerIPs)
+    loadBalancerSourceRanges: []    # empty: anyone who can reach the IP
+    annotations: {}
+  resources:
+    requests: {cpu: 10m, memory: 16Mi}
+    limits: {memory: 64Mi}
+
+# Raft members sharing a cluster (e.g. a full node and the witness) must not run on the same k8s
+# node, or losing that node loses two of the three votes. Every statusd pod in the namespace
+# avoids every other one. required: the pod stays Pending rather than share a node;
+# false: only preferred. topologyKey can be a rack/chassis label once nodes carry one.
+antiAffinity:
+  enabled: true
+  required: true
+  topologyKey: kubernetes.io/hostname
+affinity: {}          # extra affinity rules (nodeAffinity …), merged with the above
+nodeSelector: {}
+tolerations: []
+
+# Raft (7000) and the internal API (8443) must be reachable from the other DC and the witness.
+clusterService:
+  type: LoadBalancer
+  loadBalancerIP: ""              # pinned MetalLB IP (metallb.universe.tf/loadBalancerIPs) behind the node's DNS name
+  annotations: {}
+  loadBalancerSourceRanges: []    # restrict to the peer DC + witness addresses
+
+resources:
+  requests: {cpu: 50m, memory: 128Mi}
+  limits: {memory: 512Mi}
+
+podSecurityContext: {runAsNonRoot: true, runAsUser: 65532, fsGroup: 65532}

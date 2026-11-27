@@ -1,0 +1,6 @@
+# Components without signals are manual: staff set them in the control panel (operational until then).
+group: {slug: support, name: "Support", order: 40}
+components:
+  - slug: helpdesk
+    name: "Help Desk"
+    note: "Manual only: no telemetry."

@@ -1,0 +1,10 @@
+data
+bin
+*.token
+grafana_service_account
+deploy/ha-test/certs
+deploy/ha-test/state
+deploy/demo/state
+.git
+.go
+.github
